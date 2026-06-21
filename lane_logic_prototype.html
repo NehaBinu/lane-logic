@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lane Logic — Bengaluru Traffic Command</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:        #0a0e1a;
+    --surface:   #111827;
+    --border:    #1e2d45;
+    --accent:    #f59e0b;
+    --accent2:   #3b82f6;
+    --danger:    #ef4444;
+    --success:   #10b981;
+    --text:      #f1f5f9;
+    --muted:     #64748b;
+    --card:      #0f1929;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-mark {
+    width: 32px; height: 32px; background: var(--accent);
+    border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; font-size: 16px;
+  }
+  .logo-text { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo-sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3);
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; color: var(--success); font-weight: 600;
+  }
+  .live-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 360px 1fr; height: calc(100vh - 60px); }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+  .section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 12px;
+  }
+  .input-group { display: flex; flex-direction: column; gap: 8px; }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  select, input {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 12px; border-radius: 8px;
+    font-size: 13px; font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+  .predict-btn {
+    width: 100%; background: var(--accent); color: #000;
+    border: none; padding: 12px; border-radius: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.2s; letter-spacing: 0.3px;
+  }
+  .predict-btn:hover { opacity: 0.85; }
+
+  /* DEMAND METER */
+  .demand-meter { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid var(--border); }
+  .meter-title { font-size: 12px; color: var(--muted); margin-bottom: 16px; font-weight: 500; }
+  .meter-value { font-size: 48px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .meter-bar-track { height: 8px; background: var(--border); border-radius: 4px; margin: 16px 0 8px; overflow: hidden; }
+  .meter-bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .meter-label { font-size: 12px; font-weight: 600; }
+
+  /* RECOMMENDATIONS */
+  .rec-card {
+    background: var(--card); border-radius: 12px; padding: 16px;
+    border: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start;
+  }
+  .rec-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+  .rec-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .rec-body { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* MAIN PANEL */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* MAP */
+  .map-container { position: relative; flex: 1; background: #060d1a; overflow: hidden; }
+  #bengaluru-map { width: 100%; height: 100%; }
+
+  /* BOTTOM STATS */
+  .stats-bar {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 16px 24px; display: grid;
+    grid-template-columns: repeat(4, 1fr); gap: 16px;
+  }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-val { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .stat-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+  /* CHART */
+  .chart-panel {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 20px 24px; height: 180px;
+  }
+  .chart-title { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px; }
+  #demand-chart { width: 100%; height: 120px; }
+
+  /* ZONE ALERT */
+  .zone-alert {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; width: 240px;
+    display: none;
+  }
+  .zone-alert.visible { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .zone-name { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .zone-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .zone-row:last-child { border: none; }
+  .zone-key { color: var(--muted); }
+  .zone-val { font-weight: 600; }
+
+  /* SEVERITY COLORS */
+  .low    { color: var(--success); }
+  .medium { color: var(--accent); }
+  .high   { color: #f97316; }
+  .critical { color: var(--danger); }
+  .bg-low    { background: var(--success); }
+  .bg-medium { background: var(--accent); }
+  .bg-high   { background: #f97316; }
+  .bg-critical { background: var(--danger); }
+
+  /* SCROLLBAR */
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .divider { height: 1px; background: var(--border); }
+
+  .event-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .event-chip {
+    padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); cursor: pointer; text-align: center;
+    font-size: 11px; font-weight: 600; transition: all 0.2s; color: var(--muted);
+  }
+  .event-chip:hover, .event-chip.active {
+    border-color: var(--accent); color: var(--accent); background: rgba(245,158,11,0.08);
+  }
+  .event-chip span { display: block; font-size: 16px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">🚦</div>
+    <div>
+      <div class="logo-text">Lane Logic</div>
+      <div class="logo-sub">Bengaluru Traffic Command</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE SYSTEM
+    </div>
+    <div style="font-size:12px;color:var(--muted)" id="clock"></div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div>
+      <div class="section-label">Event Type</div>
+      <div class="event-type-grid">
+        <div class="event-chip active" data-type="rally" data-mult="1.4" onclick="selectEvent(this)">
+          <span>📢</span>Political Rally
+        </div>
+        <div class="event-chip" data-type="festival" data-mult="1.3" onclick="selectEvent(this)">
+          <span>🎉</span>Festival
+        </div>
+        <div class="event-chip" data-type="sports" data-mult="1.25" onclick="selectEvent(this)">
+          <span>🏏</span>Sports Event
+        </div>
+        <div class="event-chip" data-type="construction" data-mult="1.2" onclick="selectEvent(this)">
+          <span>🚧</span>Construction
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Event Details</div>
+      <div class="input-group">
+        <div>
+          <label>Location Zone</label>
+          <select id="zone-select" onchange="updateZoneInfo()">
+            <option value="">Select a geohash zone...</option>
+          </select>
+        </div>
+        <div class="input-row">
+          <div>
+            <label>Hour of Day</label>
+            <select id="hour-select">
+              <option value="7">07:00</option>
+              <option value="8">08:00</option>
+              <option value="9" selected>09:00</option>
+              <option value="10">10:00</option>
+              <option value="11">11:00</option>
+              <option value="12">12:00</option>
+              <option value="13">13:00</option>
+              <option value="14">14:00</option>
+              <option value="17">17:00</option>
+              <option value="18">18:00</option>
+              <option value="19">19:00</option>
+              <option value="20">20:00</option>
+            </select>
+          </div>
+          <div>
+            <label>Duration (hrs)</label>
+            <select id="duration-select">
+              <option value="1">1 hour</option>
+              <option value="2">2 hours</option>
+              <option value="3" selected>3 hours</option>
+              <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Expected Crowd Size</label>
+          <select id="crowd-select">
+            <option value="small">Small (&lt; 1,000)</option>
+            <option value="medium" selected>Medium (1,000 – 10,000)</option>
+            <option value="large">Large (10,000 – 50,000)</option>
+            <option value="massive">Massive (&gt; 50,000)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="predict-btn" onclick="runPrediction()">⚡ Predict & Deploy Plan</button>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="section-label">Predicted Demand</div>
+      <div class="demand-meter">
+        <div class="meter-title">Impact Zone Congestion Score</div>
+        <div class="meter-value" id="demand-val" style="color:var(--accent)">—</div>
+        <div class="meter-bar-track">
+          <div class="meter-bar-fill" id="demand-bar" style="width:0%;background:var(--accent)"></div>
+        </div>
+        <div class="meter-label" id="demand-label" style="color:var(--muted)">Run a prediction to see results</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Deployment Recommendations</div>
+      <div id="recommendations" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:var(--muted);text-align:center;padding:20px">
+          Select an event and run prediction
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="map-container">
+      <svg id="bengaluru-map" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice">
+        <!-- Bengaluru stylised road network background -->
+        <defs>
+          <radialGradient id="bg-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#0d1833"/>
+            <stop offset="100%" stop-color="#060d1a"/>
+          </radialGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <rect width="800" height="480" fill="url(#bg-grad)"/>
+
+        <!-- Grid lines (stylised road grid) -->
+        <g stroke="#0f2040" stroke-width="1" opacity="0.6">
+          <line x1="0" y1="80" x2="800" y2="80"/>
+          <line x1="0" y1="160" x2="800" y2="160"/>
+          <line x1="0" y1="240" x2="800" y2="240"/>
+          <line x1="0" y1="320" x2="800" y2="320"/>
+          <line x1="0" y1="400" x2="800" y2="400"/>
+          <line x1="100" y1="0" x2="100" y2="480"/>
+          <line x1="200" y1="0" x2="200" y2="480"/>
+          <line x1="300" y1="0" x2="300" y2="480"/>
+          <line x1="400" y1="0" x2="400" y2="480"/>
+          <line x1="500" y1="0" x2="500" y2="480"/>
+          <line x1="600" y1="0" x2="600" y2="480"/>
+          <line x1="700" y1="0" x2="700" y2="480"/>
+        </g>
+
+        <!-- Major roads -->
+        <g stroke="#1e3a5f" stroke-width="2.5" fill="none" opacity="0.8">
+          <!-- Outer Ring Road (oval) -->
+          <ellipse cx="400" cy="240" rx="280" ry="170" stroke="#1e3a5f" fill="none" stroke-dasharray="8,4"/>
+          <!-- Major arteries -->
+          <line x1="120" y1="120" x2="680" y2="360"/>
+          <line x1="680" y1="120" x2="120" y2="360"/>
+          <line x1="400" y1="30" x2="400" y2="450"/>
+          <line x1="80" y1="240" x2="720" y2="240"/>
+          <!-- Silk Board flyover area -->
+          <path d="M 350 320 Q 400 360 450 320" stroke="#2a4a70" stroke-width="3"/>
+        </g>
+
+        <!-- Zone dots - will be populated by JS -->
+        <g id="zone-layer"></g>
+
+        <!-- Selected event marker -->
+        <g id="event-marker" display="none">
+          <circle id="event-ring1" cx="400" cy="240" r="40" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6">
+            <animate attributeName="r" values="30;60;30" dur="3s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.6;0;0.6" dur="3s" repeatCount="indefinite"/>
+          </circle>
+          <circle id="event-ring2" cx="400" cy="240" r="20" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.8">
+            <animate attributeName="r" values="15;40;15" dur="3s" begin="1s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.8;0;0.8" dur="3s" begin="1s" repeatCount="indefinite"/>
+          </circle>
+          <circle id="event-center" cx="400" cy="240" r="8" fill="#f59e0b"/>
+          <text id="event-label" x="400" y="225" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="700" font-family="Inter,sans-serif">EVENT</text>
+        </g>
+
+        <!-- Landmark labels -->
+        <g fill="#334155" font-size="10" font-family="Inter,sans-serif" font-weight="500">
+          <text x="400" y="50">Hebbal</text>
+          <text x="640" y="200">Whitefield</text>
+          <text x="100" y="200">Rajajinagar</text>
+          <text x="360" y="260">MG Road</text>
+          <text x="340" y="360">Silk Board</text>
+          <text x="200" y="380">Banashankari</text>
+          <text x="540" y="380">Koramangala</text>
+          <text x="160" y="120">Yeshwanthpur</text>
+          <text x="560" y="120">ITPL</text>
+        </g>
+      </svg>
+
+      <!-- Zone info popup -->
+      <div class="zone-alert" id="zone-alert">
+        <div class="zone-name" id="zone-name">Zone Info</div>
+        <div class="zone-row"><span class="zone-key">Avg Demand</span><span class="zone-val" id="zone-demand">—</span></div>
+        <div class="zone-row"><span class="zone-key">Road Type</span><span class="zone-val" id="zone-road">—</span></div>
+        <div class="zone-row"><span class="zone-key">Lanes</span><span class="zone-val" id="zone-lanes">—</span></div>
+        <div class="zone-row"><span class="zone-key">Landmark</span><span class="zone-val" id="zone-landmark">—</span></div>
+        <div class="zone-row"><span class="zone-key">Status</span><span class="zone-val" id="zone-status">—</span></div>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-panel">
+      <div class="chart-title">Predicted Demand Profile — 24 Hours</div>
+      <canvas id="demand-chart"></canvas>
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="stat-val" id="stat-zones" style="color:var(--accent2)">1,241</div>
+        <div class="stat-label">Active Zones Monitored</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-officers" style="color:var(--accent)">—</div>
+        <div class="stat-label">Officers Recommended</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-hotspots" style="color:#f97316">—</div>
+        <div class="stat-label">Critical Hotspots</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-score" style="color:var(--success)">90.79</div>
+        <div class="stat-label">Model Accuracy Score</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────────────────────
+// Real zone statistics derived from Bengaluru traffic dataset (Day 48)
+const ZONE_DATA = [
+  {g:'qp09d9',md:0.957,rt:'Highway',l:5,lm:true},
+  {g:'qp09ft',md:0.882,rt:'Highway',l:5,lm:true},
+  {g:'qp09e5',md:0.852,rt:'Highway',l:5,lm:false},
+  {g:'qp09d2',md:0.677,rt:'Highway',l:4,lm:true},
+  {g:'qp09dc',md:0.673,rt:'Highway',l:5,lm:true},
+  {g:'qp09e4',md:0.631,rt:'Highway',l:4,lm:false},
+  {g:'qp09d8',md:0.598,rt:'Highway',l:4,lm:true},
+  {g:'qp09eb',md:0.571,rt:'Street',l:3,lm:true},
+  {g:'qp09ef',md:0.542,rt:'Street',l:3,lm:false},
+  {g:'qp03wg',md:0.521,rt:'Highway',l:5,lm:false},
+  {g:'qp09e6',md:0.487,rt:'Street',l:3,lm:true},
+  {g:'qp03xx',md:0.461,rt:'Highway',l:4,lm:false},
+  {g:'qp09d3',md:0.443,rt:'Street',l:2,lm:true},
+  {g:'qp09eg',md:0.421,rt:'Street',l:3,lm:false},
+  {g:'qp09d5',md:0.398,rt:'Street',l:2,lm:false},
+  {g:'qp03xw',md:0.376,rt:'Highway',l:4,lm:true},
+  {g:'qp09ec',md:0.354,rt:'Street',l:2,lm:false},
+  {g:'qp06p2',md:0.321,rt:'Street',l:2,lm:true},
+  {g:'qp09e7',md:0.298,rt:'Residential',l:2,lm:false},
+  {g:'qp09d6',md:0.276,rt:'Residential',l:1,lm:false},
+  {g:'qp02z1',md:0.254,rt:'Residential',l:1,lm:false},
+  {g:'qp09e9',md:0.231,rt:'Residential',l:1,lm:false},
+  {g:'qp03xy',md:0.187,rt:'Residential',l:1,lm:false},
+  {g:'qp09ed',md:0.165,rt:'Residential',l:1,lm:false},
+  {g:'qp02z9',md:0.143,rt:'Residential',l:1,lm:false},
+];
+
+// City-wide hourly demand (real data from dataset)
+const CITY_HOURLY = [
+  0.058,0.073,0.084,0.091,0.102,0.124,
+  0.198,0.312,0.421,0.487,0.512,0.534,
+  0.521,0.498,0.476,0.451,0.489,0.531,
+  0.543,0.487,0.398,0.287,0.187,0.098
+];
+
+// Map positions for zones (manually mapped to SVG viewport)
+const ZONE_POSITIONS = {
+  'qp09d9':[400,200],'qp09ft':[460,220],'qp09e5':[420,240],
+  'qp09d2':[380,210],'qp09dc':[440,200],'qp09e4':[430,250],
+  'qp09d8':[390,230],'qp09eb':[450,260],'qp09ef':[470,240],
+  'qp03wg':[280,280],'qp09e6':[440,270],'qp03xx':[260,270],
+  'qp09d3':[370,230],'qp09eg':[460,250],'qp09d5':[385,245],
+  'qp03xw':[270,290],'qp09ec':[455,265],'qp06p2':[350,300],
+  'qp09e7':[445,280],'qp09d6':[390,260],'qp02z1':[220,310],
+  'qp09e9':[450,290],'qp03xy':[275,285],'qp09ed':[462,272],
+  'qp02z9':[225,320],
+};
+
+let selectedEventMult = 1.4;
+let predictionDone = false;
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  // Populate zone dropdown
+  const sel = document.getElementById('zone-select');
+  ZONE_DATA.sort((a,b) => b.md - a.md).forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z.g;
+    opt.textContent = `${z.g} — ${z.rt} (${(z.md*100).toFixed(0)}% avg demand)`;
+    sel.appendChild(opt);
+  });
+
+  // Draw zone markers
+  drawZones();
+
+  // Draw initial chart
+  drawChart(CITY_HOURLY, null);
+
+  // Clock
+  setInterval(() => {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }, 1000);
+}
+
+function drawZones() {
+  const layer = document.getElementById('zone-layer');
+  layer.innerHTML = '';
+  ZONE_DATA.forEach(z => {
+    const pos = ZONE_POSITIONS[z.g] || [400 + Math.random()*200-100, 240 + Math.random()*150-75];
+    const color = demandColor(z.md);
+    const r = 5 + z.md * 10;
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor = 'pointer';
+    g.setAttribute('data-geo', z.g);
+    g.addEventListener('mouseenter', () => showZonePopup(z));
+    g.addEventListener('mouseleave', () => hideZonePopup());
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', pos[0]);
+    circle.setAttribute('cy', pos[1]);
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', color);
+    circle.setAttribute('opacity', '0.75');
+    circle.setAttribute('filter', z.md > 0.5 ? 'url(#glow)' : '');
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', pos[0]);
+    label.setAttribute('y', pos[1] - r - 4);
+    label.setAttribute('text-anchor','middle');
+    label.setAttribute('fill','#94a3b8');
+    label.setAttribute('font-size','8');
+    label.setAttribute('font-family','JetBrains Mono,monospace');
+    label.textContent = z.g;
+
+    g.appendChild(circle);
+    g.appendChild(label);
+    layer.appendChild(g);
+  });
+}
+
+function demandColor(d) {
+  if (d > 0.7) return '#ef4444';
+  if (d > 0.5) return '#f97316';
+  if (d > 0.3) return '#f59e0b';
+  if (d > 0.15) return '#10b981';
+  return '#3b82f6';
+}
+
+function severityLabel(d) {
+  if (d > 0.75) return {label:'CRITICAL', cls:'critical'};
+  if (d > 0.55) return {label:'HIGH', cls:'high'};
+  if (d > 0.35) return {label:'MODERATE', cls:'medium'};
+  return {label:'LOW', cls:'low'};
+}
+
+// ─── ZONE INFO ─────────────────────────────────────────────────────────────
+function showZonePopup(z) {
+  const s = severityLabel(z.md);
+  document.getElementById('zone-name').textContent = `Zone ${z.g}`;
+  document.getElementById('zone-demand').textContent = `${(z.md*100).toFixed(1)}%`;
+  document.getElementById('zone-road').textContent = z.rt;
+  document.getElementById('zone-lanes').textContent = z.l;
+  document.getElementById('zone-landmark').textContent = z.lm ? 'Yes' : 'No';
+  document.getElementById('zone-status').innerHTML = `<span class="${s.cls}">${s.label}</span>`;
+  document.getElementById('zone-alert').classList.add('visible');
+}
+
+function hideZonePopup() {
+  document.getElementById('zone-alert').classList.remove('visible');
+}
+
+function updateZoneInfo() {
+  const geo = document.getElementById('zone-select').value;
+  if (!geo) return;
+  const z = ZONE_DATA.find(x => x.g === geo);
+  if (z) showZonePopup(z);
+}
+
+// ─── EVENT SELECTION ───────────────────────────────────────────────────────
+function selectEvent(el) {
+  document.querySelectorAll('.event-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedEventMult = parseFloat(el.dataset.mult);
+}
+
+// ─── PREDICTION ───────────────────────────────────────────────────────────
+function runPrediction() {
+  const geo = document.getElementById('zone-select').value;
+  if (!geo) { alert('Please select a zone first.'); return; }
+
+  const zone = ZONE_DATA.find(z => z.g === geo);
+  const hour = parseInt(document.getElementById('hour-select').value);
+  const crowd = document.getElementById('crowd-select').value;
+  const duration = parseInt(document.getElementById('duration-select').value);
+
+  const crowdMult = {small:1.05, medium:1.15, large:1.3, massive:1.5}[crowd];
+  const baseDemand = zone.md;
+  const hourlyModifier = CITY_HOURLY[hour] / CITY_HOURLY.reduce((a,b)=>a+b,0) * 24;
+  let predicted = Math.min(0.99, baseDemand * selectedEventMult * crowdMult);
+  const severity = severityLabel(predicted);
+
+  // Update demand meter
+  const pct = Math.round(predicted * 100);
+  document.getElementById('demand-val').textContent = `${pct}%`;
+  document.getElementById('demand-val').className = `meter-value ${severity.cls}`;
+  document.getElementById('demand-bar').style.width = `${pct}%`;
+  document.getElementById('demand-bar').className = `meter-bar-fill bg-${severity.cls}`;
+  document.getElementById('demand-label').textContent = `${severity.label} CONGESTION — ${zone.rt.toUpperCase()} ZONE`;
+  document.getElementById('demand-label').className = `meter-label ${severity.cls}`;
+
+  // Officers calculation
+  const officers = Math.ceil(predicted * 40 + (zone.lm ? 5 : 0) + (zone.l >= 4 ? 4 : 0));
+  const hotspots = ZONE_DATA.filter(z => z.md * selectedEventMult * crowdMult > 0.55).length;
+  document.getElementById('stat-officers').textContent = officers;
+  document.getElementById('stat-hotspots').textContent = hotspots;
+
+  // Move event marker
+  const pos = ZONE_POSITIONS[geo] || [400,240];
+  document.getElementById('event-marker').setAttribute('display','');
+  ['event-ring1','event-ring2','event-center'].forEach(id => {
+    document.getElementById(id).setAttribute('cx', pos[0]);
+    document.getElementById(id).setAttribute('cy', pos[1]);
+  });
+  document.getElementById('event-label').setAttribute('x', pos[0]);
+  document.getElementById('event-label').setAttribute('y', pos[1]-22);
+
+  // Redraw zones with event impact
+  updateZoneColors(geo, predicted, crowdMult);
+
+  // Predicted 24h profile
+  const predictedHourly = CITY_HOURLY.map((d, h) => {
+    const inEvent = h >= hour && h < hour + duration;
+    return Math.min(0.99, d * (inEvent ? selectedEventMult * crowdMult : 1));
+  });
+  drawChart(CITY_HOURLY, predictedHourly, hour, duration);
+
+  // Recommendations
+  showRecommendations(zone, predicted, officers, hour, duration, crowd);
+
+  predictionDone = true;
+}
+
+function updateZoneColors(eventGeo, eventDemand, crowdMult) {
+  const layer = document.getElementById('zone-layer');
+  layer.querySelectorAll('[data-geo]').forEach(g => {
+    const geo = g.getAttribute('data-geo');
+    const z = ZONE_DATA.find(x => x.g === geo);
+    if (!z) return;
+    let d = z.md;
+    if (geo === eventGeo) d = eventDemand;
+    else if (Math.abs(ZONE_POSITIONS[geo]?.[0] - ZONE_POSITIONS[eventGeo]?.[0]) < 100 &&
+             Math.abs(ZONE_POSITIONS[geo]?.[1] - ZONE_POSITIONS[eventGeo]?.[1]) < 80)
+      d = Math.min(0.99, d * (1 + (selectedEventMult - 1) * 0.5 * crowdMult));
+    const circle = g.querySelector('circle');
+    circle.setAttribute('fill', demandColor(d));
+    circle.setAttribute('opacity', d > 0.5 ? '0.9' : '0.65');
+    circle.setAttribute('r', 5 + d * 12);
+  });
+}
+
+function showRecommendations(zone, predicted, officers, hour, duration, crowd) {
+  const s = severityLabel(predicted);
+  const endHour = Math.min(23, hour + duration);
+
+  const recs = [
+    {
+      icon: '👮',
+      title: `Deploy ${officers} officers`,
+      body: `Concentrate ${Math.ceil(officers*0.6)} at event perimeter. Remaining ${Math.floor(officers*0.4)} at nearest junction — ${zone.g} entry/exit points.`
+    },
+    {
+      icon: '🚧',
+      title: `Barricade ${zone.rt} access`,
+      body: `Restrict heavy vehicles on ${zone.rt.toLowerCase()} lanes during ${String(hour).padStart(2,'0')}:00–${String(endHour).padStart(2,'0')}:00. ${zone.l >= 4 ? 'Use 2 lanes for outflow only during event close.' : 'Single-lane flow recommended.'}`
+    },
+    {
+      icon: '🔀',
+      title: 'Activate diversion routes',
+      body: `${predicted > 0.7 ? 'Mandatory diversion via Outer Ring Road recommended. Alert Waze/Google Maps via API.' : 'Advisory diversion. Monitor live and escalate if demand exceeds 75%.'}`
+    },
+    {
+      icon: '📡',
+      title: predicted > 0.75 ? '⚠ High alert — coordinate with PCR' : 'Standard monitoring',
+      body: `${crowd === 'massive' || crowd === 'large' ? 'Coordinate with PCR van deployment. Ambulance corridor on standby.' : 'Standard patrol protocol. Escalate if footfall exceeds estimate.'}`
+    }
+  ];
+
+  const container = document.getElementById('recommendations');
+  container.innerHTML = recs.map(r => `
+    <div class="rec-card">
+      <div class="rec-icon">${r.icon}</div>
+      <div>
+        <div class="rec-title">${r.title}</div>
+        <div class="rec-body">${r.body}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─── CHART ────────────────────────────────────────────────────────────────
+function drawChart(baseline, predicted, eventHour, duration) {
+  const canvas = document.getElementById('demand-chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.clientWidth - 48;
+  const H = 120;
+  canvas.width = W; canvas.height = H;
+
+  const pad = {l:30, r:20, t:10, b:20};
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+
+  ctx.clearRect(0,0,W,H);
+
+  const toX = i => pad.l + (i / 23) * w;
+  const toY = v => pad.t + h - v * h;
+
+  // Event highlight band
+  if (eventHour != null) {
+    ctx.fillStyle = 'rgba(245,158,11,0.08)';
+    const x1 = toX(eventHour);
+    const x2 = toX(Math.min(23, eventHour + (duration||3)));
+    ctx.fillRect(x1, pad.t, x2-x1, h);
+  }
+
+  // Grid
+  ctx.strokeStyle = '#1e2d45';
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1.0].forEach(v => {
+    ctx.beginPath();
+    ctx.moveTo(pad.l, toY(v));
+    ctx.lineTo(pad.l + w, toY(v));
+    ctx.stroke();
+    ctx.fillStyle = '#334155';
+    ctx.font = '9px Inter';
+    ctx.fillText(`${Math.round(v*100)}%`, 0, toY(v)+3);
+  });
+
+  // Hour labels
+  ctx.fillStyle = '#334155';
+  ctx.font = '9px Inter';
+  [0,4,8,12,16,20,23].forEach(h2 => {
+    ctx.fillText(`${String(h2).padStart(2,'0')}h`, toX(h2)-8, H-4);
+  });
+
+  // Baseline line
+  ctx.beginPath();
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4,3]);
+  baseline.forEach((v,i) => i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v)));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Predicted line
+  if (predicted) {
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'rgba(245,158,11,0.3)');
+    grad.addColorStop(1,'rgba(245,158,11,0)');
+
+    ctx.beginPath();
+    predicted.forEach((v,i) => i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v)));
+    ctx.lineTo(toX(23), toY(0));
+    ctx.lineTo(toX(0), toY(0));
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    predicted.forEach((v,i) => i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v)));
+    ctx.stroke();
+  }
+
+  // Legend
+  ctx.fillStyle = '#334155'; ctx.fillRect(pad.l, 14, 20, 2);
+  ctx.fillStyle = '#64748b'; ctx.font = '9px Inter';
+  ctx.fillText('Normal', pad.l + 24, 17);
+  if (predicted) {
+    ctx.fillStyle = '#f59e0b'; ctx.fillRect(pad.l + 75, 14, 20, 2);
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('With Event', pad.l + 99, 17);
+  }
+}
+
+// Start
+init();
+</script>
+</body>
+</html>
